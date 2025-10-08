@@ -12,4 +12,8 @@ pip install --upgrade cython
 git clone https://github.com/slc03/qlib.git 
 cd qlib 
 python -m pip install -e .
+
+# 其它建议安装的库
+pip install plotly
+pip install statsmodels
 ```

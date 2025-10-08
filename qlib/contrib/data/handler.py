@@ -45,6 +45,58 @@ _DEFAULT_INFER_PROCESSORS = [
 ]
 
 
+class OrdinaryDataHandler(DataHandlerLP):
+    """平凡的数据处理器，返回原始数据"""
+    def __init__(
+        self,
+        fields,
+        instruments="csi500",
+        start_time=None,
+        end_time=None,
+        freq="day",
+        infer_processors=_DEFAULT_INFER_PROCESSORS,
+        learn_processors=_DEFAULT_LEARN_PROCESSORS,
+        fit_start_time=None,
+        fit_end_time=None,
+        process_type=DataHandlerLP.PTYPE_A,
+        filter_pipe=None,
+        inst_processors=None,
+        **kwargs,
+    ):
+        infer_processors = check_transform_proc(infer_processors, fit_start_time, fit_end_time)
+        learn_processors = check_transform_proc(learn_processors, fit_start_time, fit_end_time)
+
+        data_loader = {
+            "class": "QlibDataLoader",
+            "kwargs": {
+                "config": {
+                    "feature": (
+                        ["$" + f for f in fields],
+                        fields,
+                    ),
+                    "label": kwargs.pop("label", self.get_label_config()),
+                },
+                "filter_pipe": filter_pipe,
+                "freq": freq,
+                "inst_processors": inst_processors,
+            },
+        }
+
+        super().__init__(
+            instruments=instruments,
+            start_time=start_time,
+            end_time=end_time,
+            data_loader=data_loader,
+            learn_processors=learn_processors,
+            infer_processors=infer_processors,
+            process_type=process_type,
+            **kwargs,
+        )
+
+    def get_label_config(self):
+        return ["Ref($close, -2)/Ref($close, -1) - 1"], ["LABEL0"]
+
+
 class Alpha360(DataHandlerLP):
     def __init__(
         self,
