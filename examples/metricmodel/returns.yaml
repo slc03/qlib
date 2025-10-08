@@ -1,6 +1,6 @@
 # 初始化，传入数据集地址
 qlib_init:
-    provider_uri: "./.data/qlib_data"
+    provider_uri: "./temp/qlib_data"
     region: cn
 
 # 设置股票池/基准等全局超参数

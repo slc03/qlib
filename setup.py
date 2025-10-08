@@ -13,8 +13,8 @@ def read(rel_path: str) -> str:
 
 NUMPY_INCLUDE = numpy.get_include()
 
-
-VERSION = get_version(root=".", relative_to=__file__)
+# 自定义版本号
+VERSION = "0.1.0"
 
 setup(
     version=VERSION,
