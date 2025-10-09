@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 from abc import abstractmethod
+from datetime import timedelta
 from typing import Any, Set, Tuple, TYPE_CHECKING, Union
 
 import numpy as np
@@ -128,6 +129,19 @@ class TradeCalendarManager:
         if trade_step is None:
             trade_step = self.get_trade_step()
         calendar_index = self.start_index + trade_step - shift
+        
+        # 检查是否是最后一天
+        if calendar_index + 1 >= len(self._calendar):
+            # 发出警告
+            warnings.warn(
+                f"[Warning] trade_step {trade_step} is the last calendar index. "
+                "Automatically extend end time by 1 day to avoid IndexError."
+            )
+            start_time = self._calendar[calendar_index]
+            end_time = start_time + timedelta(days=1)  # 自动加一天
+            return start_time, end_time
+
+        # 正常逻辑
         return self._calendar[calendar_index], epsilon_change(self._calendar[calendar_index + 1])
 
     def get_data_cal_range(self, rtype: str = "full") -> Tuple[int, int]:
