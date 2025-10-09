@@ -54,8 +54,8 @@ class OrdinaryDataHandler(DataHandlerLP):
         start_time=None,
         end_time=None,
         freq="day",
-        infer_processors=_DEFAULT_INFER_PROCESSORS,
-        learn_processors=_DEFAULT_LEARN_PROCESSORS,
+        infer_processors=[],
+        learn_processors=[],
         fit_start_time=None,
         fit_end_time=None,
         process_type=DataHandlerLP.PTYPE_A,
@@ -74,7 +74,7 @@ class OrdinaryDataHandler(DataHandlerLP):
                         ["$" + f for f in fields],
                         fields,
                     ),
-                    "label": kwargs.pop("label", self.get_label_config()),
+                    "label": self.get_label_config(kwargs.pop("n_future", 1)),
                 },
                 "filter_pipe": filter_pipe,
                 "freq": freq,
@@ -93,8 +93,8 @@ class OrdinaryDataHandler(DataHandlerLP):
             **kwargs,
         )
 
-    def get_label_config(self):
-        return ["Ref($close, -2)/Ref($close, -1) - 1"], ["LABEL0"]
+    def get_label_config(self, n_future: int=1):
+        return [f"Ref($close, -{n_future+1})/Ref($close, -1) - 1"], ["LABEL0"]
 
 
 class Alpha360(DataHandlerLP):
