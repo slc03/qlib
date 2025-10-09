@@ -1,11 +1,10 @@
 import pandas as pd
-from typing import List, Text, Tuple, Union, Optional
 
 from .base import MetricBaseModel
 
 
 class ReturnsModel(MetricBaseModel):
-    """A model that directly outputs the return of the next n days."""
+    """根据过去n日的收益率做决策"""
     def __init__(self, windows: int=3):
         self.windows = windows
 
