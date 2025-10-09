@@ -270,25 +270,27 @@ class NameDFilter(SeriesDFilter):
     A name rule regular expression is required.
     """
 
-    def __init__(self, name_rule_re, fstart_time=None, fend_time=None):
-        """Init function for name filter class
-
+    def __init__(self, name_rule_re, fstart_time=None, fend_time=None, reverse: bool=False):
+        """
         Parameters
         ----------
         name_rule_re: str
             regular expression for the name rule.
+        reverse: bool
+            whether to reverse the filter (剔除匹配的股票)
         """
         super(NameDFilter, self).__init__(fstart_time, fend_time)
         self.name_rule_re = name_rule_re
+        self.reverse = reverse
 
     def _getFilterSeries(self, instruments, fstart, fend):
         all_filter_series = {}
         filter_calendar = Cal.calendar(start_time=fstart, end_time=fend, freq=self.filter_freq)
         for inst, timestamp in instruments.items():
-            if re.match(self.name_rule_re, inst):
-                _filter_series = pd.Series({timestamp: True for timestamp in filter_calendar})
-            else:
-                _filter_series = pd.Series({timestamp: False for timestamp in filter_calendar})
+            matched = bool(re.match(self.name_rule_re, inst))
+            if self.reverse:
+                matched = not matched  # 取反
+            _filter_series = pd.Series({timestamp: matched for timestamp in filter_calendar})
             all_filter_series[inst] = _filter_series
         return all_filter_series
 
@@ -298,6 +300,7 @@ class NameDFilter(SeriesDFilter):
             name_rule_re=config["name_rule_re"],
             fstart_time=config["filter_start_time"],
             fend_time=config["filter_end_time"],
+            reverse=config["reverse"],
         )
 
     def to_config(self):
@@ -306,6 +309,7 @@ class NameDFilter(SeriesDFilter):
             "name_rule_re": self.name_rule_re,
             "filter_start_time": str(self.filter_start_time) if self.filter_start_time else self.filter_start_time,
             "filter_end_time": str(self.filter_end_time) if self.filter_end_time else self.filter_end_time,
+            "reverse": self.reverse,
         }
 
 
