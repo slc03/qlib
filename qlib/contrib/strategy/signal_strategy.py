@@ -429,10 +429,15 @@ class MyTopkDropoutStrategy(BaseSignalStrategy):
         sorted_series = pred_score.reindex(current_stock_list).sort_values(ascending=False)
         last = sorted_series.index
         
-        # # 🟩 打印所有当前持仓及其分数
-        # print("\n[Holding Rank] 当前持仓全部股票及对应预测分数:")
-        # for code, score in sorted_series.items():
-        #     print(f"    {code}: {score:.4f}")
+        # 🟩 打印所有当前持仓及其分数及排名占比
+        print("\n[Holding Rank] 当前持仓全部股票及对应预测分数及排名占比:")
+        rank_all = pred_score.rank(ascending=False, pct=True)
+        for code, score in sorted_series.items():
+            if code in rank_all:
+                pct_rank = rank_all[code] * 100
+                print(f"    {code}: {score:.4f}  (前{pct_rank:.2f}%)")
+            else:
+                print(f"    {code}: {score:.4f}  (无排名)")
 
         # 🟦 打印当日股票池 top10
         print("\n[Signal Rank] 当日全股票池 Top10 股票及信号:")
@@ -529,7 +534,7 @@ class MyTopkDropoutStrategy(BaseSignalStrategy):
                     )
                     cash += trade_val - trade_cost
                     print(f"  [Sell] {code} 数量={sell_amount:.2f} 价格={trade_price:.2f} 收入={trade_val:.2f} 手续费={trade_cost:.2f} 当前现金={cash:.2f}")
-                    print(f"  [Profit] {code} 持有天数={hold_days} 股价变化: {init_price:.2f}->{trade_price:.2f}={(trade_price/init_price-1)*100:.2f}%")
+                    print(f"  [Profit] {code} 持有交易日数={hold_days} 卖出日期: {trade_end_time.strftime('%Y-%m-%d')} 股价变化: {init_price:.2f}->{trade_price:.2f}={(trade_price/init_price-1)*100:.2f}%")
                 else:
                     print(f"  [Invalid Order] {code} 卖单校验未通过。")
 
