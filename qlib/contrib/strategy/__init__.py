@@ -3,6 +3,7 @@
 
 
 from .signal_strategy import (
+    MyTopkDropoutStrategy,
     TopkDropoutStrategy,
     WeightStrategyBase,
     EnhancedIndexingStrategy,
@@ -18,6 +19,7 @@ from .cost_control import SoftTopkStrategy
 
 
 __all__ = [
+    "MyTopkDropoutStrategy",
     "TopkDropoutStrategy",
     "WeightStrategyBase",
     "EnhancedIndexingStrategy",

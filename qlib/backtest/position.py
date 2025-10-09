@@ -238,6 +238,7 @@ class Position(BasePosition):
         'amount': <the amount of the security>,
         'price': <the close price of security in the last trading day>,
         'weight': <the security weight of total position value>,
+        'init_price': <the purchase price when the position was initially opened>,
       },
     }
     """
@@ -338,6 +339,7 @@ class Position(BasePosition):
         self.position[stock_id]["amount"] = amount
         self.position[stock_id]["price"] = price
         self.position[stock_id]["weight"] = 0  # update the weight in the end of the trade date
+        self.position[stock_id]["init_price"] = price
 
     def _buy_stock(self, stock_id: str, trade_val: float, cost: float, trade_price: float) -> None:
         trade_amount = trade_val / trade_price
@@ -422,6 +424,9 @@ class Position(BasePosition):
     def get_stock_list(self) -> List[str]:
         stock_list = list(set(self.position.keys()) - {"cash", "now_account_value", "cash_delay"})
         return stock_list
+    
+    def get_stock_init_price(self, code: str) -> float:
+        return self.position[code]["init_price"]
 
     def get_stock_price(self, code: str) -> float:
         return self.position[code]["price"]
