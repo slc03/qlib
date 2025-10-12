@@ -382,8 +382,8 @@ class MyTopkDropoutStrategy(BaseSignalStrategy):
         if isinstance(pred_score, pd.DataFrame):
             print("[Info] pred_score 为 DataFrame，取第一列")
             pred_score = pred_score.iloc[:, 0]
-        if pred_score is None:
-            print("[Warning] 无预测信号，返回空交易决策。")
+        if pred_score is None or np.isfinite(pred_score).sum() == 0:
+            print("[Warning] 无有效预测信号，返回空交易决策。")
             return TradeDecisionWO([], self)
 
         # 🧩 统计基本信息

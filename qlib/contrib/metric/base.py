@@ -11,6 +11,10 @@ class MetricBaseModel(Model):
     This class does not require training and directly uses metrics for prediction."""
     def __init__(self):
         pass
+    
+    def _zscore_cs(self, s: pd.Series) -> pd.Series:
+        """工具函数：横截面标准化 (Cross-sectional Z-score)"""
+        return (s - s.dropna().mean()) / s.dropna().std()
 
     def fit(self, dataset: Optional[DatasetH] = None):
         """Do nothing"""
