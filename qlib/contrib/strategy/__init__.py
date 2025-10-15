@@ -3,7 +3,6 @@
 
 
 from .signal_strategy import (
-    MyTopkDropoutStrategy,
     TopkDropoutStrategy,
     WeightStrategyBase,
     EnhancedIndexingStrategy,
@@ -16,10 +15,11 @@ from .rule_strategy import (
 )
 
 from .cost_control import SoftTopkStrategy
+from .factor_strategy import MyTopkDropoutStrategy
+from .dot_strategy import IntradayTStrategy
 
 
 __all__ = [
-    "MyTopkDropoutStrategy",
     "TopkDropoutStrategy",
     "WeightStrategyBase",
     "EnhancedIndexingStrategy",
@@ -27,4 +27,6 @@ __all__ = [
     "SBBStrategyBase",
     "SBBStrategyEMA",
     "SoftTopkStrategy",
+    "MyTopkDropoutStrategy",
+    "IntradayTStrategy",
 ]

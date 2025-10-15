@@ -489,6 +489,10 @@ class IndexData(metaclass=index_data_ops_creator):
         assert out is None and dtype is None, "`out` is just for compatible with numpy's aggregating function"
         # FIXME: weird logic and not general
         if axis is None:
+            # 如果 self.data 为空，明确地返回 np.nan，避免警告
+            if self.data.size == 0:
+                return np.nan
+            # 只有在不为空时才计算
             return np.nanmean(self.data)
         elif axis == 0:
             tmp_data = np.nanmean(self.data, axis=0)

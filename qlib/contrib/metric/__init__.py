@@ -16,3 +16,7 @@ from .rzrq import (
     Factor_Stealth_Accumulation_CS_Plus,
     Factor_Financing_Momentum_Weighted,
 )
+
+from .dot import (
+    Factor_KDJJ,
+)
