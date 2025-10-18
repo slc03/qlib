@@ -322,6 +322,46 @@ class Position(BasePosition):
             self.position[stock]["price"] = price_dict[stock]
         self.position["now_account_value"] = self.calculate_value()
 
+    def get_stock_position_info(self, 
+                                stock_id: str, 
+                                end_time: Union[str, pd.Timestamp], 
+                                time_per_step: str='day',
+                                fields: List[str]=['$close']) -> pd.DataFrame:
+        """
+        获取持仓阶段的股票时序信息
+
+        Parameters
+        ----------
+        stock_id : str
+            股票ID
+        end_time : Union[str, pd.Timestamp]
+            结束时间
+        time_per_step : str
+            持仓时间单位，默认为'day'
+        fields: List[str]
+            获取的时序信息的特征
+
+        Returns
+        -------
+        pd.DataFrame
+            包含股票持仓信息的DataFrame
+        """
+        if stock_id not in self.position:
+            raise KeyError(f"{stock_id} not in current position")
+
+        end_time = pd.Timestamp(end_time)
+        hold_days = self.get_stock_count(stock_id, bar=time_per_step)
+
+        price_df = D.features(
+            [stock_id],
+            fields,
+            start_time=None,
+            end_time=end_time,
+            freq=time_per_step,
+            disk_cache=True,
+        )
+        return price_df.xs(stock_id).tail(hold_days)
+
     def _init_stock(self, stock_id: str, amount: float, price: float | None = None) -> None:
         """
         initialization the stock in current position

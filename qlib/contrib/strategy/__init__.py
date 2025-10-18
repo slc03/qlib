@@ -14,10 +14,13 @@ from .rule_strategy import (
     SBBStrategyEMA,
 )
 
-from .cost_control import SoftTopkStrategy
-from .factor_strategy import MyTopkDropoutStrategy
-from .dot_strategy import IntradayTStrategy
+from .factor_strategy import (
+    MyTopkDropoutStrategy,
+    OpenAndCloseStrategy,
+)
 
+from .cost_control import SoftTopkStrategy
+from .dot_strategy import IntradayTStrategy
 
 __all__ = [
     "TopkDropoutStrategy",
@@ -26,7 +29,8 @@ __all__ = [
     "TWAPStrategy",
     "SBBStrategyBase",
     "SBBStrategyEMA",
-    "SoftTopkStrategy",
     "MyTopkDropoutStrategy",
+    "OpenAndCloseStrategy",
+    "SoftTopkStrategy",
     "IntradayTStrategy",
 ]
