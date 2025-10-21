@@ -144,7 +144,7 @@ def workflow(config_path, experiment_name="workflow", uri_folder="mlruns"):
 
     if "experiment_name" in config:
         experiment_name = config["experiment_name"]
-    recorder = task_train(config.get("task"), experiment_name=experiment_name, recorder_name=config.get("recorder_name", None))
+    recorder = task_train(config.get("task"), experiment_name=experiment_name, recorder_name=config.get("recorder_name", None), config=config)
     recorder.save_objects(config=config)
 
 

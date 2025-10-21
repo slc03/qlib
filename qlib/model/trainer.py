@@ -10,7 +10,8 @@ In ``DelayTrainer``, the first step is only to save some necessary info to model
 
 ``Qlib`` offer two kinds of Trainer, ``TrainerR`` is the simplest way and ``TrainerRM`` is based on TaskManager to help manager tasks lifecycle automatically.
 """
-
+import os
+import sys
 import socket
 from typing import Callable, List, Optional
 
@@ -39,11 +40,13 @@ def _log_task_info(task_config: dict):
     R.set_tags(**{"hostname": socket.gethostname()})
 
 
-def _exe_task(task_config: dict):
+def _exe_task(task_config: dict, model: Optional[Model]=None, dataset: Optional[Dataset]=None):
     rec = R.get_recorder()
     # model & dataset initialization
-    model: Model = init_instance_by_config(task_config["model"], accept_types=Model)
-    dataset: Dataset = init_instance_by_config(task_config["dataset"], accept_types=Dataset)
+    if model is None:
+        model: Model = init_instance_by_config(task_config["model"], accept_types=Model)
+    if dataset is None:
+        dataset: Dataset = init_instance_by_config(task_config["dataset"], accept_types=Dataset)
     reweighter: Reweighter = task_config.get("reweighter", None)
     # model training
     auto_filter_kwargs(model.fit)(dataset, reweighter=reweighter)
@@ -105,7 +108,48 @@ def end_task_train(rec: Recorder, experiment_name: str) -> Recorder:
     return rec
 
 
-def task_train(task_config: dict, experiment_name: str, recorder_name: str = None) -> Recorder:
+def task_train_with_multi_models(task_config: dict, experiment_name: str, recorder_name: Optional[str]=None, config: Optional[str]=None) -> Recorder:
+    """使用相同的数据集并发测试多个策略"""
+    # 加载数据集/模型等全局参数
+    print("\n预加载数据集...")
+    if isinstance(task_config["model"], list):
+        models: List[Model] = [init_instance_by_config(mi, accept_types=Model) for mi in task_config["model"]]
+    else:
+        models: List[Model] = [init_instance_by_config(task_config["model"], accept_types=Model)]
+    dataset: Dataset = init_instance_by_config(task_config["dataset"], accept_types=Dataset)
+    output_dir = task_config.get("output", None)
+    
+    # TODO: 未来拓展到多进程并行执行
+    for i, model in enumerate(models):
+        print(f"\n### 实验 {i+1} 开始，模型 {model.__class__.__name__} ###\n")
+        
+        # --- 重定向 stdout ---
+        original_stdout = sys.stdout
+        if output_dir is not None:
+            with open(os.path.join(output_dir, f"{model.__class__.__name__}.log"), "w", encoding="utf-8") as f:
+                sys.stdout = f
+            
+                with R.start(experiment_name=experiment_name, recorder_name=model.__class__.__name__):
+                    _log_task_info(task_config)
+                    _exe_task(task_config, model, dataset)
+                    recorder = R.get_recorder()
+
+        else:
+            with R.start(experiment_name=experiment_name, recorder_name=model.__class__.__name__):
+                _log_task_info(task_config)
+                _exe_task(task_config, model, dataset)
+                recorder = R.get_recorder()
+                
+        if i < len(models) - 1:
+            recorder.save_objects(config=config)
+        
+        sys.stdout = original_stdout
+        
+    # 仅返回最后一个recorder，将在主函数中记录config
+    return recorder
+
+
+def task_train(task_config: dict, experiment_name: str, recorder_name: Optional[str]=None, config: Optional[str]=None) -> Recorder:
     """
     Task based training, will be divided into two steps.
 
@@ -122,10 +166,14 @@ def task_train(task_config: dict, experiment_name: str, recorder_name: str = Non
     ----------
     Recorder: The instance of the recorder
     """
-    with R.start(experiment_name=experiment_name, recorder_name=recorder_name):
-        _log_task_info(task_config)
-        _exe_task(task_config)
-        return R.get_recorder()
+    if isinstance(task_config["model"], list):
+        print("--- 检测到多个待测模型，将导入到并发执行函数 ---")
+        return task_train_with_multi_models(task_config, experiment_name, recorder_name, config)
+    else:
+        with R.start(experiment_name=experiment_name, recorder_name=recorder_name):
+            _log_task_info(task_config)
+            _exe_task(task_config)
+            return R.get_recorder()
 
 
 class Trainer:
