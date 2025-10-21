@@ -121,21 +121,21 @@ def task_train_with_multi_models(task_config: dict, experiment_name: str, record
     
     # TODO: 未来拓展到多进程并行执行
     for i, model in enumerate(models):
-        print(f"\n### 实验 {i+1} 开始，模型 {model.__class__.__name__} ###\n")
+        print(f"\n### 实验 {i+1} 开始，模型 {model.__name__} ###\n")
         
         # --- 重定向 stdout ---
         original_stdout = sys.stdout
         if output_dir is not None:
-            with open(os.path.join(output_dir, f"{model.__class__.__name__}.log"), "w", encoding="utf-8") as f:
+            with open(os.path.join(output_dir, f"{model.__name__}.log"), "w", encoding="utf-8") as f:
                 sys.stdout = f
             
-                with R.start(experiment_name=experiment_name, recorder_name=model.__class__.__name__):
+                with R.start(experiment_name=experiment_name, recorder_name=model.__name__):
                     _log_task_info(task_config)
                     _exe_task(task_config, model, dataset)
                     recorder = R.get_recorder()
 
         else:
-            with R.start(experiment_name=experiment_name, recorder_name=model.__class__.__name__):
+            with R.start(experiment_name=experiment_name, recorder_name=model.__name__):
                 _log_task_info(task_config)
                 _exe_task(task_config, model, dataset)
                 recorder = R.get_recorder()

@@ -1,4 +1,7 @@
-from .base import MetricBaseModel
+from .base import (
+    MetricBaseModel,
+    ExpressionFactor,
+)
 from .returns import (
     ReturnsModel,
 )
