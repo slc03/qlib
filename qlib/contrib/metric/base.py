@@ -45,13 +45,19 @@ class ExpressionFactor(MetricBaseModel):
             normalize_by="datetime"
         )
         factor.process(X_test)
-    """
-    def __init__(self, expr: str, group_by: str = "instrument", normalize_by: Optional[str] = None, params: Optional[dict] = None):
-        self.expr = expr
-        self.group_by = group_by
-        self.normalize_by = normalize_by
-        self.params = params or {}
         
+    TODO: 添加对横截面标准化的支持
+    """
+    def __init__(self, 
+                 expr: str,
+                 zscore_default: bool = True,
+                 normalized_final: bool = False,
+                 params: Optional[dict] = None):
+        self.expr = expr
+        self.params = params or {}
+        self.zscore_default = zscore_default
+        self.normalized_final = normalized_final
+
         # 初始化时即生成唯一名称
         self.__name__ = self._generate_name()
 
@@ -85,30 +91,53 @@ class ExpressionFactor(MetricBaseModel):
         """生成短哈希，用于区分相似表达式"""
         h = hashlib.sha1(text.encode("utf-8")).hexdigest()
         return h[:length]
- 
+
     # --------------------------------------------------------
     # 核心入口
     # --------------------------------------------------------
     def process(self, X: pd.DataFrame) -> pd.Series:
+        # 先判断是否需要对所有字段标准化
+        if self.zscore_default:
+            print("将标准化所有字段，请勿重复标准化")
+            for col in [col for col in X.columns if not col.startswith("LABEL")]:
+                X[col] = X.groupby("instrument")[col].transform(self._zscore)
+        
         # 将所有字段注入命名空间
         local_env = {col: X[col] for col in X.columns}
 
         # 注册常用函数
         local_env.update({
-            "roc": self._roc,
-            "ma": self._ma,
-            "zscore": self._zscore,
-            "sigmoid": self._sigmoid,
-            "log": np.log,
-            "abs": np.abs,
+            # numpy函数
             "np": np,
+            "abs": np.abs,
+            "log": np.log,
+            "exp": np.exp,
+            "sqrt": np.sqrt,
+            "sign": np.sign,
+            "where": np.where,
+            
+            # pandas/numpy安全替代
+            "nan": np.nan,
+            "inf": np.inf,
+            "isnan": np.isnan,
+            "isinf": np.isinf,
+            
+            # 内置函数
+            "roc": self._roc,
+            "rroc": self._rroc,
+            "ma": self._ma,
+            "ema": self._ema,
+            "zscore": self._zscore,
+            "zscore_sec": self._zscore_cross_sectional,
+            "sigmoid": self._sigmoid,
+            "if": lambda cond, a, b: np.where(cond, a, b),
         })
 
         # 支持参数化表达式中的变量
         local_env.update(self.params)
 
         # 分组计算（例如按股票计算时间序列）
-        grouped = X.groupby(self.group_by)
+        grouped = X.groupby("instrument")
 
         # 对每组计算表达式
         results = []
@@ -119,8 +148,8 @@ class ExpressionFactor(MetricBaseModel):
         factor = pd.concat(results).sort_index()
 
         # 横截面标准化（可选）
-        if self.normalize_by is not None:
-            factor = factor.groupby(self.normalize_by).transform(self._zscore)
+        if self.normalized_final:
+            factor = factor.groupby("datetime").transform(self._zscore)
 
         return factor.reindex(X.index)
 
@@ -147,9 +176,15 @@ class ExpressionFactor(MetricBaseModel):
     
     def _roc(self, series: pd.Series, N: int) -> pd.Series:
         return series / series.shift(N) - 1
+    
+    def _rroc(self, series: pd.Series, M: int, N: int) -> pd.Series:
+        return series.shift(M) / series.shift(N) - 1
 
     def _ma(self, series: pd.Series, N: int) -> pd.Series:
         return series.rolling(N, min_periods=1).mean()
+    
+    def _ema(self, series: pd.Series, N: int) -> pd.Series:
+        return series.ewm(span=N, adjust=False, min_periods=1).mean()
 
     def _sigmoid(self, x: pd.Series) -> pd.Series:
         return 1 / (1 + np.exp(-x))
@@ -159,10 +194,10 @@ class ExpressionFactor(MetricBaseModel):
         try:
             # 使用 eval + pandas 支持（比 numexpr 更灵活）
             result = pd.eval(self.expr, local_dict={**env, **group.to_dict("series")}, engine="python")
-            result.index = group.index
+            result = pd.Series(result, index=group.index)
             return result
         except Exception as e:
-            print(f"[EvalError] {e} in group {group[self.group_by].iloc[0]}")
+            print(f"[EvalError] {e} in group {group.index[0]}")
             return pd.Series(np.nan, index=group.index)
 
 
@@ -190,16 +225,19 @@ if __name__ == "__main__":
         "model": {
             "class": "ExpressionFactor",
             "module_path": "qlib.contrib.metric",
-            # "kwargs": {
-            #     "expr": "zscore(roc(rzmre, N)) * sigmoid(-k * roc(close, 1))",
-            #     "params": {"N": 5, "k": 4.5},
-            #     "group_by": "instrument",
-            #     "normalize_by": "datetime",
-            # },
             "kwargs": {
-                "expr": "zscore(roc(close, N))",
-                "params": {"N": 1},          
-            }
+                "expr": (
+                            "where(rroc(close, 1, 2) > 0.095, nan, "
+                            "zscore(roc(rzmre, N)) / (abs(zscore(roc(close, N))) + epsilon))"
+                        ),
+                "params": {"N": 1, "epsilon": 1e-4},
+                "zscore_default": False,
+            },
+            # "kwargs": {
+            #     "expr": "roc(close, N)",
+            #     "params": {"N": 1},
+            #     "zscore_default": True,
+            # }
         },
         "dataset": {
             "class": "DatasetH",
