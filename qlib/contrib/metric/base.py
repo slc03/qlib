@@ -85,7 +85,7 @@ class ExpressionFactor(MetricBaseModel):
     def _generate_name(self) -> str:
         """根据表达式生成安全且唯一的名称"""
         # 替换算子符号为下划线（保持可读性）
-        sanitized = self._sanitize_expr(self.expr)
+        sanitized = self._sanitize_expr(self.expr, self.params)
 
         # 添加哈希后缀以避免重复
         short_hash = self._short_hash(self.expr)
@@ -97,9 +97,12 @@ class ExpressionFactor(MetricBaseModel):
 
         return name
 
-    def _sanitize_expr(self, expr: str) -> str:
+    def _sanitize_expr(self, expr: str, mapping: Optional[dict] = None) -> str:
         """将表达式转换为文件安全格式"""
         expr = expr.lower()
+        if mapping:
+            pattern = re.compile(r'\b(' + '|'.join(map(re.escape, mapping.keys())) + r')\b')
+            expr = pattern.sub(lambda m: str(mapping[m.group(0)]), expr)
         expr = re.sub(r"[^a-z0-9_]+", "_", expr)    # 非法字符换成_
         expr = re.sub(r"_+", "_", expr)             # 合并连续的下划线
         expr = expr.strip("_")                      # 去首尾下划线
@@ -186,7 +189,7 @@ class ExpressionFactor(MetricBaseModel):
     def _zscore_rolling(self, series: pd.Series, window: int=252, error: float=1e-6, min_periods: int=10) -> pd.Series:
         """对单支股票按时间序列做滚动标准化"""
         if self.safe_mode:
-            window = int(min(min_periods, window))
+            window = int(max(min_periods, window))
         mean = series.rolling(window, min_periods=min_periods).mean()
         std = series.rolling(window, min_periods=min_periods).std(ddof=0)
         return (series - mean) / (std + error)
@@ -203,14 +206,14 @@ class ExpressionFactor(MetricBaseModel):
     @ensure_series
     def _roc(self, series: pd.Series, N: int=5) -> pd.Series:
         if self.safe_mode:
-            N = int(min(1, N))
+            N = int(max(1, N))
         return series / series.shift(N) - 1
     
     @ensure_series
     def _rroc(self, series: pd.Series, M: int=1, N: int=5) -> pd.Series:
         if self.safe_mode:
-            M = int(min(1, M))
-            N = int(min(0, N))
+            M = int(max(1, M))
+            N = int(max(0, N))
             if M == N:
                 N = M + 1
         return series.shift(M) / series.shift(N) - 1
@@ -218,37 +221,37 @@ class ExpressionFactor(MetricBaseModel):
     @ensure_series
     def _ma(self, series: pd.Series, N: int=5) -> pd.Series:
         if self.safe_mode:
-            N = int(min(1, N))
+            N = int(max(1, N))
         return series.rolling(N, min_periods=1).mean()
     
     @ensure_series
     def _mmax(self, series: pd.Series, N: int=5) -> pd.Series:
         if self.safe_mode:
-            N = int(min(1, N))
+            N = int(max(1, N))
         return series.rolling(N, min_periods=1).max()
     
     @ensure_series
     def _mmin(self, series: pd.Series, N: int=5) -> pd.Series:
         if self.safe_mode:
-            N = int(min(1, N))
+            N = int(max(1, N))
         return series.rolling(N, min_periods=1).min()
     
     @ensure_series
     def _mstd(self, series: pd.Series, N: int=5) -> pd.Series:
         if self.safe_mode:
-            N = int(min(1, N))
+            N = int(max(1, N))
         return series.rolling(N, min_periods=1).std()
 
     @ensure_series
     def _mmedian(self, series: pd.Series, N: int=5) -> pd.Series:
         if self.safe_mode:
-            N = int(min(1, N))
+            N = int(max(1, N))
         return series.rolling(N, min_periods=1).median()
     
     @ensure_series
     def _ema(self, series: pd.Series, N: int=5) -> pd.Series:
         if self.safe_mode:
-            N = int(min(1, N))
+            N = int(max(1, N))
         return series.ewm(span=N, adjust=False, min_periods=1).mean()
 
     @ensure_series
