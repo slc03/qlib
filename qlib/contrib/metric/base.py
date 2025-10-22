@@ -2,6 +2,7 @@ import re
 import hashlib
 import numpy as np
 import pandas as pd
+from functools import wraps
 from typing import Text, Union, Optional, Literal
 
 from ...model.base import Model
@@ -31,6 +32,20 @@ class MetricBaseModel(Model):
         """Predict method"""
         X_test = dataset.prepare(segment, col_set="feature", data_key=DataHandlerLP.DK_I)
         return self.process(X_test)
+    
+    
+def ensure_series(method):
+    """保证第一个参数是 Series，如果是标量则自动扩展"""
+    @wraps(method)
+    def wrapper(self, series, *args, **kwargs):
+        # 如果是标量，自动扩展为 Series
+        if isinstance(series, (int, float, np.number)):
+            lens = getattr(self, "series_len", None)
+            if lens is None:
+                raise ValueError("属性 'series_len' 未设置，无法生成与数据等长的 Series。请在实例中设定 self.series_len")
+            series = pd.Series([series] * lens)
+        return method(self, series, *args, **kwargs)
+    return wrapper
 
 
 class ExpressionFactor(MetricBaseModel):
@@ -52,11 +67,14 @@ class ExpressionFactor(MetricBaseModel):
                  expr: str,
                  zscore_default: bool = True,
                  normalized_final: bool = False,
+                 safe_mode: bool = True,
                  params: Optional[dict] = None):
         self.expr = expr
         self.params = params or {}
         self.zscore_default = zscore_default
         self.normalized_final = normalized_final
+        self.safe_mode = safe_mode
+        self.series_len = None
 
         # 初始化时即生成唯一名称
         self.__name__ = self._generate_name()
@@ -101,6 +119,7 @@ class ExpressionFactor(MetricBaseModel):
             print("将标准化所有字段，请勿重复标准化")
             for col in [col for col in X.columns if not col.startswith("LABEL")]:
                 X[col] = X.groupby("instrument")[col].transform(self._zscore)
+        self.series_len = len(X)
         
         # 将所有字段注入命名空间
         local_env = {col: X[col] for col in X.columns}
@@ -126,6 +145,10 @@ class ExpressionFactor(MetricBaseModel):
             "roc": self._roc,
             "rroc": self._rroc,
             "ma": self._ma,
+            "mmax": self._mmax,
+            "mmin": self._mmin,
+            "mstd": self._mstd,
+            "mmedian": self._mmedian,
             "ema": self._ema,
             "zscore": self._zscore,
             "zscore_sec": self._zscore_cross_sectional,
@@ -156,38 +179,81 @@ class ExpressionFactor(MetricBaseModel):
     # --------------------------------------------------------
     # 内部函数注册
     # --------------------------------------------------------
-    def _zscore_cross_sectional(self, x: pd.Series, error: float=1e-6) -> pd.Series:
+    def _zscore_cross_sectional(self, series: pd.Series, error: float=1e-6) -> pd.Series:
         """对同一时点的截面进行标准化"""
-        return (x - x.mean()) / (x.std(ddof=0) + error)
+        return (series - series.mean()) / (series.std(ddof=0) + error)
     
-    def _zscore_rolling(self, x: pd.Series, window: int=252, error: float=1e-6) -> pd.Series:
+    def _zscore_rolling(self, series: pd.Series, window: int=252, error: float=1e-6, min_periods: int=10) -> pd.Series:
         """对单支股票按时间序列做滚动标准化"""
-        mean = x.rolling(window, min_periods=10).mean()
-        std = x.rolling(window, min_periods=10).std(ddof=0)
-        return (x - mean) / (std + error)
+        if self.safe_mode:
+            window = int(min(min_periods, window))
+        mean = series.rolling(window, min_periods=min_periods).mean()
+        std = series.rolling(window, min_periods=min_periods).std(ddof=0)
+        return (series - mean) / (std + error)
     
-    def _zscore(self, x: pd.Series, mode: Literal['ts', 'cs']='ts', window: int=252, error: float=1e-6) -> pd.Series:
+    @ensure_series
+    def _zscore(self, series: pd.Series, mode: Literal['ts', 'cs']='ts', window: int=252, error: float=1e-6) -> pd.Series:
         if mode == 'cs':
-            return self._zscore_cross_sectional(x, error)
+            return self._zscore_cross_sectional(series, error)
         elif mode == 'ts':
-            return self._zscore_rolling(x, window, error)
+            return self._zscore_rolling(series, window, error)
         else:
             raise ValueError("mode must be 'cs' or 'ts'")
     
-    def _roc(self, series: pd.Series, N: int) -> pd.Series:
+    @ensure_series
+    def _roc(self, series: pd.Series, N: int=5) -> pd.Series:
+        if self.safe_mode:
+            N = int(min(1, N))
         return series / series.shift(N) - 1
     
-    def _rroc(self, series: pd.Series, M: int, N: int) -> pd.Series:
+    @ensure_series
+    def _rroc(self, series: pd.Series, M: int=1, N: int=5) -> pd.Series:
+        if self.safe_mode:
+            M = int(min(1, M))
+            N = int(min(0, N))
+            if M == N:
+                N = M + 1
         return series.shift(M) / series.shift(N) - 1
 
-    def _ma(self, series: pd.Series, N: int) -> pd.Series:
+    @ensure_series
+    def _ma(self, series: pd.Series, N: int=5) -> pd.Series:
+        if self.safe_mode:
+            N = int(min(1, N))
         return series.rolling(N, min_periods=1).mean()
     
-    def _ema(self, series: pd.Series, N: int) -> pd.Series:
+    @ensure_series
+    def _mmax(self, series: pd.Series, N: int=5) -> pd.Series:
+        if self.safe_mode:
+            N = int(min(1, N))
+        return series.rolling(N, min_periods=1).max()
+    
+    @ensure_series
+    def _mmin(self, series: pd.Series, N: int=5) -> pd.Series:
+        if self.safe_mode:
+            N = int(min(1, N))
+        return series.rolling(N, min_periods=1).min()
+    
+    @ensure_series
+    def _mstd(self, series: pd.Series, N: int=5) -> pd.Series:
+        if self.safe_mode:
+            N = int(min(1, N))
+        return series.rolling(N, min_periods=1).std()
+
+    @ensure_series
+    def _mmedian(self, series: pd.Series, N: int=5) -> pd.Series:
+        if self.safe_mode:
+            N = int(min(1, N))
+        return series.rolling(N, min_periods=1).median()
+    
+    @ensure_series
+    def _ema(self, series: pd.Series, N: int=5) -> pd.Series:
+        if self.safe_mode:
+            N = int(min(1, N))
         return series.ewm(span=N, adjust=False, min_periods=1).mean()
 
-    def _sigmoid(self, x: pd.Series) -> pd.Series:
-        return 1 / (1 + np.exp(-x))
+    @ensure_series
+    def _sigmoid(self, series: pd.Series) -> pd.Series:
+        return 1 / (1 + np.exp(-series))
 
     def _safe_eval(self, group: pd.DataFrame, env: dict) -> pd.Series:
         """安全地按组计算表达式"""
