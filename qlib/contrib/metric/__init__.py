@@ -22,4 +22,5 @@ from .rzrq import (
 
 from .dot import (
     Factor_KDJJ,
+    Simple_DoT,
 )
