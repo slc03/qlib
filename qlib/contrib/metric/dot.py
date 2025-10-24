@@ -82,3 +82,96 @@ class Factor_KDJJ(MetricBaseModel):
         df_final = df_final.reorder_levels(["datetime", "instrument"])
         
         return df_final['signal']
+
+
+class Simple_DoT(MetricBaseModel):
+    """极简做T模型，每天选择一个时间点（买入/卖出），然后尾盘接回"""
+    def __init__(self, sell_time: str = "11:30:00", buy_time: str = "14:57:00"):
+        super().__init__()
+        self.sell_time = sell_time
+        self.buy_time = buy_time
+
+    def process(self, X_test: pd.DataFrame) -> pd.Series:
+        """
+        根据时间生成买卖信号：
+        - 每天13:01:00卖出(-1)
+        - 每天14:59:00买入(1)
+        - 其他时间为0
+        """
+        # 复制索引
+        idx = X_test.index
+
+        # 取 datetime 层
+        datetimes = idx.get_level_values('datetime')
+
+        # 提取时间部分字符串
+        time_str = datetimes.strftime("%H:%M:%S")
+
+        # 创建信号序列
+        signal = pd.Series(0, index=idx, dtype=int)
+
+        # 设置买入/卖出信号
+        signal[time_str == self.buy_time] = 1
+        signal[time_str == self.sell_time] = -1
+
+        return signal
+
+
+if __name__ == "__main__":
+    """
+    - cd qlib
+    - python -m qlib.contrib.metric.dot
+    """
+    import qlib
+    from qlib.utils import init_instance_by_config
+    
+    start_time = "2024-10-18"
+    end_time = "2025-09-18"
+    freq = "1min"
+    benchmark = "000048.SZ"
+    
+    data_handler_config = {
+        "start_time": start_time,
+        "end_time": end_time,
+        "fit_start_time": start_time,
+        "fit_end_time": end_time,
+        "fields": ["close", "open_daily", "high_daily", "low_daily", "close_daily", "DailyKey"],
+        "instruments": "all",
+        "freq": freq,
+    }
+
+    task = {
+        "model": {
+            "class": "Simple_DoT",
+            "module_path": "qlib.contrib.metric",
+            # "kwargs": {
+            #     "xxx": "xxx",
+            # },
+        },
+        "dataset": {
+            "class": "DatasetH",
+            "module_path": "qlib.data.dataset",
+            "kwargs": {
+                "handler": {
+                    "class": "OrdinaryDataHandler",
+                    "module_path": "qlib.contrib.data.handler",
+                    "kwargs": data_handler_config,
+                },
+                "segments": {
+                    "test": (start_time, end_time),
+                },
+            },
+        },
+    }
+    
+    # Qlib initialization
+    qlib.init(provider_uri="../temp/qlib_data_minute")
+    
+    # model initialization
+    model = init_instance_by_config(task["model"])
+    dataset = init_instance_by_config(task["dataset"])
+
+    # start exp to test model
+    ds = dataset.prepare('test')
+    ds.to_csv("../temp/ds_origin.csv")
+    model.process(ds).to_csv("../temp/ds_processed.csv")

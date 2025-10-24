@@ -364,7 +364,7 @@ class Exchange:
         # For example, the stock trading is limited in a day if every minute is limited in a day if every minute is limited.
         if direction is None:
             # The trading limitation is related to the trading direction
-            # if the direction is not provided, then any limitation from buy or sell will result in trading limitation
+            # if the direction is not provided, then any limitation from buy or sell will result in trading limitation          
             buy_limit = self.quote.get_data(stock_id, start_time, end_time, field="limit_buy", method="all")
             sell_limit = self.quote.get_data(stock_id, start_time, end_time, field="limit_sell", method="all")
             return bool(buy_limit or sell_limit)
@@ -407,12 +407,30 @@ class Exchange:
         start_time: pd.Timestamp,
         end_time: pd.Timestamp,
         direction: int | None = None,
-    ) -> bool:
-        # check if stock can be traded
-        return not (
-            self.check_stock_suspended(stock_id, start_time, end_time)
-            or self.check_stock_limit(stock_id, start_time, end_time, direction)
-        )
+        specific_mode: bool = False,
+    ) -> bool | Tuple[bool, str]:
+        """
+        检查股票是否可交易。
+        默认返回 bool；
+        若 specific_mode=True，则返回 (bool, reason_str)。
+        """
+        suspended = self.check_stock_suspended(stock_id, start_time, end_time)
+        limit_hit = self.check_stock_limit(stock_id, start_time, end_time, direction)
+
+        if suspended:
+            result = False
+            reason = "股票已经停牌"
+        elif limit_hit:
+            result = False
+            reason = "股票已经涨停/跌停"
+        else:
+            result = True
+            reason = "股票可以正常交易"
+
+        if specific_mode:
+            return result, reason
+        else:
+            return result
 
     def check_order(self, order: Order) -> bool:
         # check limit and suspended

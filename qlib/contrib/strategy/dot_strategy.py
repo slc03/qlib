@@ -26,67 +26,11 @@ class IntradayTStrategy(BaseSignalStrategy):
     def __init__(
         self,
         *,
-        topk,
-        n_drop,
-        method_sell="bottom",
-        method_buy="top",
-        hold_thresh=1,
-        only_tradable=False,
         forbid_all_trade_at_limit=True,
-        stop_profit=None,
-        stop_loss=None,
         **kwargs,
     ):
-        """
-        Parameters
-        -----------
-        topk : int
-            the number of stocks in the portfolio.
-        n_drop : int
-            number of stocks to be replaced in each trading date.
-        method_sell : str
-            dropout method_sell, random/bottom.
-        method_buy : str
-            dropout method_buy, random/top.
-        hold_thresh : int
-            minimum holding days
-            before sell stock , will check current.get_stock_count(order.stock_id) >= self.hold_thresh.
-        only_tradable : bool
-            will the strategy only consider the tradable stock when buying and selling.
-
-            if only_tradable:
-
-                strategy will make decision with the tradable state of the stock info and avoid buy and sell them.
-
-            else:
-
-                strategy will make buy sell decision without checking the tradable state of the stock.
-        forbid_all_trade_at_limit : bool
-            if forbid all trades when limit_up or limit_down reached.
-
-            if forbid_all_trade_at_limit:
-
-                strategy will not do any trade when price reaches limit up/down, even not sell at limit up nor buy at
-                limit down, though allowed in reality.
-
-            else:
-
-                strategy will sell at limit up and buy ad limit down.
-        stop_profit : float
-            take profit threshold, e.g. 0.1 means taking profit when the price increase 10%
-        stop_loss : float
-            stop loss threshold, e.g. -0.1 means stopping loss when the price decrease 10%
-        """
         super().__init__(**kwargs)
-        self.topk = topk
-        self.n_drop = n_drop
-        self.method_sell = method_sell
-        self.method_buy = method_buy
-        self.hold_thresh = hold_thresh
-        self.only_tradable = only_tradable
         self.forbid_all_trade_at_limit = forbid_all_trade_at_limit
-        self.stop_profit = stop_profit
-        self.stop_loss = stop_loss
     
     def generate_trade_decision(self, execute_result=None):
         """仅在做出交易决策时，才打印内容，以减少信息量"""
@@ -117,13 +61,15 @@ class IntradayTStrategy(BaseSignalStrategy):
         # 5️⃣ 根据信号确定买入/卖出还是持有，以及开仓数量
         if pred_score < 0 and len(current_stock_list) > 0:
             print(f"  [Datetime] {trade_end_time.strftime('%Y-%m-%d %H:%M:%S')}")
-            if not self.trade_exchange.is_stock_tradable(
+            stock_tradable, reason = self.trade_exchange.is_stock_tradable(
                 stock_id = code,
                 start_time = trade_start_time,
                 end_time = trade_end_time,
                 direction = None if self.forbid_all_trade_at_limit else OrderDir.SELL,
-            ):
-                print(f"[Skip] {code} 不可卖出。")
+                specific_mode = True,
+            )
+            if not stock_tradable:
+                print(f"[Skip] {code} 不可卖出。（{reason}）")
                 return TradeDecisionWO([], self)
             
             hold_amount = current_temp.get_stock_amount(code=code)
@@ -148,13 +94,15 @@ class IntradayTStrategy(BaseSignalStrategy):
                 
         elif pred_score > 0 and cash > 0:
             print(f"  [Datetime] {trade_end_time.strftime('%Y-%m-%d %H:%M:%S')}     [Code] {code}")
-            if not self.trade_exchange.is_stock_tradable(
+            stock_tradable, reason = self.trade_exchange.is_stock_tradable(
                 stock_id = code,
                 start_time = trade_start_time,
                 end_time = trade_end_time,
                 direction = None if self.forbid_all_trade_at_limit else OrderDir.BUY,
-            ):
-                print(f"  [Skip] {code} 不可买入。")
+                specific_mode = True,
+            )
+            if not stock_tradable:
+                print(f"  [Skip] {code} 不可买入。（{reason}）")
                 return TradeDecisionWO([], self)
             
             buy_price = self.trade_exchange.get_deal_price(
